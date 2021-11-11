@@ -3,6 +3,7 @@ package cobraFlagPrompt
 import (
 	"fmt"
 	"github.com/spf13/cobra"
+	"sync"
 )
 
 type requiredFlag struct {
@@ -46,6 +47,11 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, name string) error {
 	return nil
 }
 
+var (
+	// I doubt this is necessary but I'm going to add it just in case someone is doing some weird stuff with cobra.
+	preRunMux sync.Mutex
+)
+
 // preRun ensures the existing PreRunE or PreRun command which could be defined by the developer consuming this library is executed.
 //
 // Why is this set up like this? In Cobra, PreRunE and PreRun execute just prior to `func validateRequiredFlags` which is where
@@ -61,7 +67,11 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, name string) error {
 // our PreRunE is defined our code will not run. However, the documentation for Cobra suggests defining PreRunE in
 // the cobra.Command{} struct definition and defining flags after that, so I am hopeful developers will naturally
 // not encounter this problem. In the event that they DO encounter this problem, they can call CobraFlagPromptPreRunE directly.
+//
+// Testing note: I do not intend to write any tests for this. All testing was done by manually defining PreRun and PreRunE
+// which printed out "PreRunE" on github.com/Polyapp-LLC/gendeploy and making sure the text was printed to the cmd line.
 func preRun(existingPreRunE func(cmd *cobra.Command, args []string) error, existingPreRun func(cmd *cobra.Command, args []string)) func(cmd *cobra.Command, args []string) error {
+	hasBeenCalled := make(map[*cobra.Command]bool)
 	return func(cmd *cobra.Command, args []string) error {
 		var err error
 		if existingPreRunE != nil {
@@ -72,15 +82,28 @@ func preRun(existingPreRunE func(cmd *cobra.Command, args []string) error, exist
 		} else if existingPreRun != nil {
 			existingPreRun(cmd, args)
 		}
+
+		// preRun will be called several times (once for each required flag). But CobraFlagPromptPreRunE only wants
+		// to be executed once. Indeed, if the developer decides to call CobraFlagPromptPreRunE directly, then
+		// it only WILL be executed once. To avoid having the developer's way of calling the code != the
+		// cobraFlagPrompt way of calling this code, let's only allow this code to be called once per cmd.
+		preRunMux.Lock()
+		defer preRunMux.Unlock()
+		if (hasBeenCalled[cmd]) {
+			return nil
+		}
+
 		err = CobraFlagPromptPreRunE(cmd, args)
 		if err != nil {
 			return fmt.Errorf("cobraFlagPromptPreRunE: %w", err)
 		}
+		hasBeenCalled[cmd] = true
 		return nil
 	}
 }
 
 // CobraFlagPromptPreRunE runs our PreRunE command, which will prompt the user to enter information for missing flags.
+// This function can be called multiple times, but it will only run once.
 //
 // Developer note: This code is automatically attached to PreRunE when you call MarkFlagRequired or MarkPersistentFlagRequired
 // BUT if you set PreRunE *after* calling MarkFlagRequired or MarkPersistentFlagRequired, that will overwrite this PreRunE.
