@@ -50,6 +50,8 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, name string) error {
 var (
 	// I doubt this is necessary but I'm going to add it just in case someone is doing some weird stuff with cobra.
 	preRunMux sync.Mutex
+
+	hasBeenCalled = make(map[*cobra.Command]bool)
 )
 
 // preRun ensures the existing PreRunE or PreRun command which could be defined by the developer consuming this library is executed.
@@ -71,7 +73,6 @@ var (
 // Testing note: I do not intend to write any tests for this. All testing was done by manually defining PreRun and PreRunE
 // which printed out "PreRunE" on github.com/Polyapp-LLC/gendeploy and making sure the text was printed to the cmd line.
 func preRun(existingPreRunE func(cmd *cobra.Command, args []string) error, existingPreRun func(cmd *cobra.Command, args []string)) func(cmd *cobra.Command, args []string) error {
-	hasBeenCalled := make(map[*cobra.Command]bool)
 	return func(cmd *cobra.Command, args []string) error {
 		var err error
 		if existingPreRunE != nil {
