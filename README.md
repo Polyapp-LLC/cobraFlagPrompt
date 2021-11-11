@@ -32,8 +32,10 @@ func init() {
     rootCmd.Flags().StringVar(&EnvironmentName, "environmentName", "", `environment names can only be lowercase ascii characters and hyphens. Example: test-one`)
     rootCmd.PersistentFlags().StringVarP(&CloudName, "cloudName", "n", "", `cloud name must be one of the following strings: "AWS", "Azure", "Google", "localhost"`)
     
-    // Warning: You MUST define your rootCmd.PreRunE or rootCmd.PreRun PRIOR to this next line of code.
-    // cobraFlagPrompt only works because it attaches some code in PreRunE.
+    // WARNING: If you are using rootCmd.PreRunE or rootCmd.PreRun then please define them PRIOR to this next line of code.
+    // If you must define them after this line of code, call `func cobraFlagPrompt.CobraFlagPromptPreRunE`
+    // at the end of your rootCmd.PreRunE or rootCmd.PreRun
+    // Read the GoDoc for more information.
     err := cobraFlagPrompt.MarkFlagRequired(rootCmd, "environmentName")
     if err != nil {
         panic("cobraFlagPrompt.MarkFlagRequired(environmentName): " + err.Error())
