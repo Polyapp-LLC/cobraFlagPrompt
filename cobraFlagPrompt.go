@@ -1,8 +1,13 @@
 package cobraFlagPrompt
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"io"
+	"os"
 	"sync"
 )
 
@@ -84,17 +89,19 @@ func preRun(existingPreRunE func(cmd *cobra.Command, args []string) error, exist
 			existingPreRun(cmd, args)
 		}
 
-		// preRun will be called several times (once for each required flag). But CobraFlagPromptPreRunE only wants
-		// to be executed once. Indeed, if the developer decides to call CobraFlagPromptPreRunE directly, then
-		// it only WILL be executed once. To avoid having the developer's way of calling the code != the
-		// cobraFlagPrompt way of calling this code, let's only allow this code to be called once per cmd.
+		// preRun will be called several times from MarkFlagRequired and/or MarkPersistentFlagRequired
+		// (once for each required flag). CobraFlagPromptPreRunE *could* be written so that it could be run
+		// multiple times in sequence or in parallel for the same Cmd. However, if the developer decides to
+		// call CobraFlagPromptPreRunE directly, then it will only be executed once. To avoid having the developer's
+		// way of calling CobraFlagPromptPreRunE != the cobraFlagPrompt way, we must ensure preRun also only
+		// calls CobraFlagPromptPreRunE once.
 		preRunMux.Lock()
 		defer preRunMux.Unlock()
 		if (hasBeenCalled[cmd]) {
 			return nil
 		}
 
-		err = CobraFlagPromptPreRunE(cmd, args)
+		err = CobraFlagPromptPreRunE(cmd, args, os.Stdout, os.Stdin)
 		if err != nil {
 			return fmt.Errorf("cobraFlagPromptPreRunE: %w", err)
 		}
@@ -103,15 +110,191 @@ func preRun(existingPreRunE func(cmd *cobra.Command, args []string) error, exist
 	}
 }
 
-// CobraFlagPromptPreRunE runs our PreRunE command, which will prompt the user to enter information for missing flags.
-// This function can be called multiple times, but it will only run once.
+// CobraFlagPromptPreRunE is the cobraFlagPrompt PreRunE code which will prompt the user to enter information for missing flags.
+// cobraFlagPrompt makes an effort to call this function for you. Most developers will not need to call it manually.
+// However, if you do find yourself needing to trigger this function manually, make sure you call it exactly once per
+// cmd *cobra.Command.
+//
+// Inputs: cmd where we can find the flags; args from the program; os.StdOut (pass this in to help with testing)
+//
+// If there are no cobraFlagPrompt required flags registered at the cmd, this func does nothing.
 //
 // Developer note: This code is automatically attached to PreRunE when you call MarkFlagRequired or MarkPersistentFlagRequired
 // BUT if you set PreRunE *after* calling MarkFlagRequired or MarkPersistentFlagRequired, that will overwrite this PreRunE.
 // In that scenario, you will need to manually call CobraFlagPromptPreRunE *at the very end of your PreRunE*.
 // Because Cobra prefers PreRunE over PreRun (it's an if / else if), if you set your own PreRun after calling
 // MarkFlagRequired or MarkPersistentFlagRequired then that PreRun will be ignored (unless you also cleared out PreRunE).
-func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string) error {
-	fmt.Println("CobraFlagPromptPreRunE")
+func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string, stdIn io.Reader, stdOut io.Writer) error {
+	if cmd == nil {
+		return errors.New("CobraFlagPromptPreRunE saw cmd == nil")
+	}
+	var err error
+	flags := cmd.Flags()
+	visitAllErrors := []error{}
+	flags.VisitAll(func(pflag *pflag.Flag) {
+		isRequired := false
+		for _, f := range flagsRequired {
+			if f.name == pflag.Name {
+				isRequired = true
+			}
+		}
+		if !isRequired {
+			return
+		}
+
+		// If the developer specifies a field is required yet the required field has a default value, I'm left
+		// with the question: What to do? It does not make sense to have a required field which is populated automatically.
+		// In that case there is no point in specifying it as a required field since it will always have a value.
+		//
+		// The only logical reason I can come up with for doing this is to provide a "suggested value" to the user.
+		//
+		// For "suggested value" cases, a developer may want the user to verify that a "suggested value" is
+		// what they intended while still providing them with a reasonable default.
+		if !pflag.Changed || pflag.NoOptDefVal == pflag.Value.String() {
+			// user did not set the value -> we want to capture it from them.
+			// value was not set to default -> we want to capture it from them.
+			// second part of the 'if' is the "suggested value" case.
+			err = PromptForFlag(pflag, stdIn, stdOut)
+			if err != nil {
+				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", pflag.Name, err))
+			}
+		}
+
+		if pflag.Value == nil {
+			// I'm not sure if this is possible, but if it is, we want to prompt for the value
+			err = PromptForFlag(pflag, stdIn, stdOut)
+			if err != nil {
+				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", pflag.Name, err))
+			}
+		}
+	})
+
+	visitAllErrorsCombined := ""
+	for _, e := range visitAllErrors {
+		visitAllErrorsCombined += e.Error() + "; "
+	}
+	if visitAllErrorsCombined != "" {
+		return fmt.Errorf("VisitAll errors combined and separated with ';': %v", visitAllErrorsCombined)
+	}
+
+	return nil
+}
+
+// PromptForFlag prompts the user to enter a value for pflag. It can handle any type of flag supported by cobra.
+//
+// The value received from the user is stored in the same way cobra stores it and is retrievable in the same way.
+func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
+	var err error
+	err = infoPrompt(stdOut, flag)
+	if err != nil {
+		return fmt.Errorf("infoPrompt: %w", err)
+	}
+
+	// There are a LOT of implemented flag types from pflag's flag.go
+	// We will only want to test a subset of them, but this might work for others.
+
+	// Slices should implement the SliceValue interface.
+	sliceValue, ok := flag.Value.(pflag.SliceValue)
+	if ok {
+		// case where we need to take a list of inputs
+		// reset the slice to remove any defaults
+		err = sliceValue.Replace([]string{})
+		if err != nil {
+			return fmt.Errorf("sliceValue.Replace to reset the flag: %w", err)
+		}
+
+		_, err = fmt.Fprintf(stdOut, "This flag is a list. Each line you type will be one element in the list. To terminate the list, press Enter.")
+		if err != nil {
+			return fmt.Errorf("fmt.Fprintf at 'this flag is a list': %w", err)
+		}
+		receivedStringsCount := 0
+		scanner := bufio.NewScanner(stdIn)
+		for {
+			var stringReceiver string
+			if scanner.Scan() {
+				stringReceiver = scanner.Text()
+			}
+			err = scanner.Err()
+			if err == nil && stringReceiver == "" {
+				if receivedStringsCount > 0 {
+					// OK pressed enter
+					break
+				} else {
+					// The user entered nothing for this list. This is not allowed since it is a required flag.
+					_, err = fmt.Fprintf(stdOut, "You must enter at least one value in this list because this flag is required.")
+					if err != nil {
+						return fmt.Errorf("fmt.Fprintf at 'list flag is required': %w", err)
+					}
+					err = infoPrompt(stdOut, flag)
+					if err != nil {
+						return fmt.Errorf("infoPrompt: %w", err)
+					}
+					_, err = fmt.Fprintf(stdOut, "This flag is a list. Each line you type will be one element in the list. To terminate the list, press Enter.")
+					if err != nil {
+						return fmt.Errorf("fmt.Fprintf at the second 'this flag is a list' notification: %w", err)
+					}
+					continue
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("fmt.Fscanln: %w", err)
+			}
+			err = sliceValue.Append(stringReceiver)
+			if err != nil {
+				_, err = fmt.Fprintf(stdOut, "error processing input with pflag.SliceValue.Append(): %v\n", err.Error())
+				if err != nil {
+					return fmt.Errorf("fmt.Fprintf: %w", err)
+				}
+				// we want to give the user another chance to input a value
+				continue
+			}
+
+			receivedStringsCount++
+		}
+	} else {
+		var stringReceiver string
+		scanner := bufio.NewScanner(stdIn)
+		for {
+			if scanner.Scan() {
+				stringReceiver = scanner.Text()
+			}
+			err = scanner.Err()
+			if err == nil && stringReceiver == "" {
+				err = infoPrompt(stdOut, flag)
+				if err != nil {
+					return fmt.Errorf("infoPrompt: %w", err)
+				}
+				// force the user to enter a value
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("fmt.Fscanln: %w", err)
+			}
+			err = flag.Value.Set(stringReceiver)
+			if err != nil {
+				_, err = fmt.Fprintf(stdOut, "error processing input with pflag.Value.Set(): %v\n", err.Error())
+				if err != nil {
+					return fmt.Errorf("fmt.Fprintf: %w", err)
+				}
+				// we want to give the user another chance to input a value
+				continue
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func infoPrompt(stdOut io.Writer, pflag *pflag.Flag) error {
+	var err error
+	_, err = fmt.Fprintf(stdOut, "Flag --%v is required. Please enter a value for this flag.\n", pflag.Name)
+	if err != nil {
+		return fmt.Errorf("fmt.Fprintf: %w", err)
+	}
+	_, err = fmt.Fprintf(stdOut, "Usage: %v\n", pflag.Usage)
+	if err != nil {
+		return fmt.Errorf("fmt.Fprintf: %w", err)
+	}
 	return nil
 }

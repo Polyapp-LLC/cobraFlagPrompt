@@ -10,7 +10,7 @@ First, get the package
 
 `go get github.com/Polyapp-LLC/cobraFlagPrompt`
 
-Then modify your existing Cobra code. Example Cobra init() function for a program with 2 flags and which does **NOT** use cobraFlagPrompt:
+Then modify your existing Cobra code. Here is an example Cobra init() function for a program with 2 flags and which does **NOT** use cobraFlagPrompt:
 ```
 func init() {
     rootCmd.Flags().StringVar(&EnvironmentName, "environmentName", "", `environment names can only be lowercase ascii characters and hyphens. Example: test-one`)
@@ -26,7 +26,7 @@ func init() {
     }
 }
 ```
-Here is the same code, except `rootCmd.MarkFlagRequired` -> `cobraFlagPrompt.MarkFlagRequired`.
+Here is the same code, except it is using cobraFlagPrompt. Notice: `rootCmd.MarkFlagRequired` has been updated to: `cobraFlagPrompt.MarkFlagRequired`.
 ```
 func init() {
     rootCmd.Flags().StringVar(&EnvironmentName, "environmentName", "", `environment names can only be lowercase ascii characters and hyphens. Example: test-one`)
@@ -49,4 +49,4 @@ func init() {
 The results can be seen above (this is the code used in the example videos).
 
 ## Support and Issues
-This code supports all native types in Go. Tests are in [cobraFlagPrompt_test.go](./cobraFlagPrompt_test.go). Questions? Leave an Issue! Thanks :)
+Cobra Flag Prompt supports many of the different flag types (all string types, int types, uint types, booleans, and slices thereof), but Cobra also supports a number of non-standard data types like duration and custom which are not supported. If you want to add support for a type, please contribute!. Tests are in [cobraFlagPrompt_test.go](./cobraFlagPrompt_test.go). Questions? Leave an Issue! Thanks :)
