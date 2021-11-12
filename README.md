@@ -1,5 +1,7 @@
 # Cobra Flag Prompt
-Cobra Flag Prompt [GoDoc](TODO) prompts users to enter values for required flags. It is an extension of [Cobra](https://github.com/spf13/cobra), and requires that you use Cobra to set up the CLI for your program.
+Cobra Flag Prompt prompts users to enter values for required flags. It is an extension of [Cobra](https://github.com/spf13/cobra), and requires that you use Cobra to set up the CLI for your program.
+
+[GoDoc](https://pkg.go.dev/github.com/Polyapp-LLC/cobraFlagPrompt)
 
 ## User Experience Before Cobra Flag Prompt
 
