@@ -33,7 +33,7 @@ func MarkFlagRequired(cmd *cobra.Command, name string) error {
 	cmd.PreRunE = preRun(cmd.PreRunE, cmd.PreRun)
 	// cmd.PreRun = nil // not necessary
 
-	// TODO verify that this flag is a regular flag and not a persistent flag
+	// TODO verify that this flag is a regular flag and not a persistent flag???
 	flagsRequired = append(flagsRequired, requiredFlag{name: name, cmdToWhichFlagIsAttached: cmd})
 	return nil
 }
@@ -47,7 +47,7 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, name string) error {
 	cmd.PreRunE = preRun(cmd.PreRunE, cmd.PreRun)
 	// cmd.PreRun = nil
 
-	// TODO verify that this flag is a persistent flag and not a regular flag?
+	// TODO verify that this flag is a persistent flag and not a regular flag???
 	persistentFlagsRequired = append(persistentFlagsRequired, requiredFlag{name: name})
 	return nil
 }
