@@ -101,7 +101,7 @@ func preRun(existingPreRunE func(cmd *cobra.Command, args []string) error, exist
 			return nil
 		}
 
-		err = CobraFlagPromptPreRunE(cmd, args, os.Stdout, os.Stdin)
+		err = CobraFlagPromptPreRunE(cmd, args, os.Stdin, os.Stdout)
 		if err != nil {
 			return fmt.Errorf("cobraFlagPromptPreRunE: %w", err)
 		}
