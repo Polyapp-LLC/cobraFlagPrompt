@@ -21,6 +21,7 @@ var (
 	// flagsRequired is a list of flag names which are required. They can include both persistent and non-persistent flags.
 	flagsRequired           = make([]requiredFlag, 0)
 	persistentFlagsRequired = make([]requiredFlag, 0)
+	orderedAllFlags = make([]requiredFlag, 0)
 )
 
 // MarkFlagRequired causes the command to prompt the user if this flag is not provided as a command line argument.
@@ -35,6 +36,7 @@ func MarkFlagRequired(cmd *cobra.Command, name string) error {
 
 	// TODO verify that this flag is a regular flag and not a persistent flag???
 	flagsRequired = append(flagsRequired, requiredFlag{name: name, cmdToWhichFlagIsAttached: cmd})
+	orderedAllFlags = append(orderedAllFlags, requiredFlag{name: name, cmdToWhichFlagIsAttached: cmd})
 	return nil
 }
 
@@ -49,6 +51,7 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, name string) error {
 
 	// TODO verify that this flag is a persistent flag and not a regular flag???
 	persistentFlagsRequired = append(persistentFlagsRequired, requiredFlag{name: name})
+	orderedAllFlags = append(orderedAllFlags, requiredFlag{name: name})
 	return nil
 }
 
@@ -130,21 +133,12 @@ func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string, stdIn io.Reader, 
 	}
 	var err error
 	flags := cmd.Flags()
-	visitAllErrors := []error{}
-	flags.VisitAll(func(flag *pflag.Flag) {
-		isRequired := false
-		for _, f := range flagsRequired {
-			if f.name == flag.Name {
-				isRequired = true
-			}
-		}
-		for _, f := range persistentFlagsRequired {
-			if f.name == flag.Name {
-				isRequired = true
-			}
-		}
-		if !isRequired {
-			return
+
+	// prompts should occur in the order the flags were added, not in alphabetical order!
+	for _, flagName := range orderedAllFlags {
+		flag := flags.Lookup(flagName.name)
+		if flag == nil {
+			continue
 		}
 
 		// If the developer specifies a field is required yet the required field has a default value, I'm left
@@ -161,7 +155,7 @@ func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string, stdIn io.Reader, 
 			// second part of the 'if' is the "suggested value" case.
 			err = PromptForFlag(flag, stdIn, stdOut)
 			if err != nil {
-				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", flag.Name, err))
+				return fmt.Errorf("PromptForFlag flag name (%v): %w", flag.Name, err)
 			}
 		}
 
@@ -169,17 +163,9 @@ func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string, stdIn io.Reader, 
 			// I'm not sure if this is possible, but if it is, we want to prompt for the value
 			err = PromptForFlag(flag, stdIn, stdOut)
 			if err != nil {
-				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", flag.Name, err))
+				return fmt.Errorf("PromptForFlag flag name (%v): %w", flag.Name, err)
 			}
 		}
-	})
-
-	visitAllErrorsCombined := ""
-	for _, e := range visitAllErrors {
-		visitAllErrorsCombined += e.Error() + "; "
-	}
-	if visitAllErrorsCombined != "" {
-		return fmt.Errorf("VisitAll errors combined and separated with ';': %v", visitAllErrorsCombined)
 	}
 
 	return nil
@@ -200,6 +186,8 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 
 	// Slices should implement the SliceValue interface.
 	sliceValue, ok := flag.Value.(pflag.SliceValue)
+	tries := 0
+	maxTries := 5
 	if ok {
 		// case where we need to take a list of inputs
 		// reset the slice to remove any defaults
@@ -215,6 +203,9 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 		receivedStringsCount := 0
 		scanner := bufio.NewScanner(stdIn)
 		for {
+			if tries > maxTries {
+				return errors.New("max tries exceeded")
+			}
 			var stringReceiver string
 			if scanner.Scan() {
 				stringReceiver = scanner.Text()
@@ -238,6 +229,7 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 					if err != nil {
 						return fmt.Errorf("fmt.Fprintf at the second 'this flag is a list' notification: %w", err)
 					}
+					tries++
 					continue
 				}
 			}
@@ -260,6 +252,9 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 		var stringReceiver string
 		scanner := bufio.NewScanner(stdIn)
 		for {
+			if tries > maxTries {
+				return errors.New("max tries exceeded")
+			}
 			if scanner.Scan() {
 				stringReceiver = scanner.Text()
 			}
@@ -281,6 +276,7 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 				if err != nil {
 					return fmt.Errorf("fmt.Fprintf: %w", err)
 				}
+				tries++
 				// we want to give the user another chance to input a value
 				continue
 			}

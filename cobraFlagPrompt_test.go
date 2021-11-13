@@ -146,10 +146,10 @@ func TestListStringPointerFlags(t *testing.T) {
 
 	var testOut bytes.Buffer
 	var testIn bytes.Buffer
-	testIn.WriteString("string value\nsecond\n")
+	testIn.WriteString("string value\nsecond\n\n")
 	err = CobraFlagPromptPreRunE(twoStringValueCmd, []string{}, &testIn, &testOut)
 	if err != nil {
-		t.Errorf("CobraFlagPromptPreRunE: %v", err.Error())
+		t.Fatalf("CobraFlagPromptPreRunE: %v", err.Error())
 	}
 	if !strings.Contains(testOut.String(), fmt.Sprintf("Flag --%v is required. Please enter a value for this flag.", "stringPtr")) {
 		t.Error("testOut should have prompted for the flag named stringPtr")

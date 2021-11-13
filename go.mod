@@ -1,6 +1,6 @@
 module github.com/Polyapp-LLC/cobraFlagPrompt
 
-go 1.16
+go 1.17
 
 require (
 	github.com/spf13/cobra v1.2.1
