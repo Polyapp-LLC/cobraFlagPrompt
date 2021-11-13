@@ -47,8 +47,8 @@ func MarkPersistentFlagRequired(cmd *cobra.Command, name string) error {
 	cmd.PreRunE = preRun(cmd.PreRunE, cmd.PreRun)
 	// cmd.PreRun = nil
 
-	// TODO verify that this flag is a persistent flag and not a regular flag
-	flagsRequired = append(persistentFlagsRequired, requiredFlag{name: name})
+	// TODO verify that this flag is a persistent flag and not a regular flag?
+	persistentFlagsRequired = append(persistentFlagsRequired, requiredFlag{name: name})
 	return nil
 }
 
@@ -131,10 +131,15 @@ func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string, stdIn io.Reader, 
 	var err error
 	flags := cmd.Flags()
 	visitAllErrors := []error{}
-	flags.VisitAll(func(pflag *pflag.Flag) {
+	flags.VisitAll(func(flag *pflag.Flag) {
 		isRequired := false
 		for _, f := range flagsRequired {
-			if f.name == pflag.Name {
+			if f.name == flag.Name {
+				isRequired = true
+			}
+		}
+		for _, f := range persistentFlagsRequired {
+			if f.name == flag.Name {
 				isRequired = true
 			}
 		}
@@ -150,21 +155,21 @@ func CobraFlagPromptPreRunE(cmd *cobra.Command, args []string, stdIn io.Reader, 
 		//
 		// For "suggested value" cases, a developer may want the user to verify that a "suggested value" is
 		// what they intended while still providing them with a reasonable default.
-		if !pflag.Changed || pflag.NoOptDefVal == pflag.Value.String() {
+		if !flag.Changed || flag.NoOptDefVal == flag.Value.String() {
 			// user did not set the value -> we want to capture it from them.
 			// value was not set to default -> we want to capture it from them.
 			// second part of the 'if' is the "suggested value" case.
-			err = PromptForFlag(pflag, stdIn, stdOut)
+			err = PromptForFlag(flag, stdIn, stdOut)
 			if err != nil {
-				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", pflag.Name, err))
+				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", flag.Name, err))
 			}
 		}
 
-		if pflag.Value == nil {
+		if flag.Value == nil {
 			// I'm not sure if this is possible, but if it is, we want to prompt for the value
-			err = PromptForFlag(pflag, stdIn, stdOut)
+			err = PromptForFlag(flag, stdIn, stdOut)
 			if err != nil {
-				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", pflag.Name, err))
+				visitAllErrors = append(visitAllErrors, fmt.Errorf("PromptForFlag flag name (%v): %w", flag.Name, err))
 			}
 		}
 	})
