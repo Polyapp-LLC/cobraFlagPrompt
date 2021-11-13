@@ -208,7 +208,7 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 			return fmt.Errorf("sliceValue.Replace to reset the flag: %w", err)
 		}
 
-		_, err = fmt.Fprintf(stdOut, "This flag is a list. Each line you type will be one element in the list. To terminate the list, press Enter.")
+		_, err = fmt.Fprintf(stdOut, "This flag is a list. Each line you type will be one element in the list. To terminate the list, press Enter.\n")
 		if err != nil {
 			return fmt.Errorf("fmt.Fprintf at 'this flag is a list': %w", err)
 		}
@@ -226,7 +226,7 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 					break
 				} else {
 					// The user entered nothing for this list. This is not allowed since it is a required flag.
-					_, err = fmt.Fprintf(stdOut, "You must enter at least one value in this list because this flag is required.")
+					_, err = fmt.Fprintf(stdOut, "You must enter at least one value in this list because this flag is required.\n")
 					if err != nil {
 						return fmt.Errorf("fmt.Fprintf at 'list flag is required': %w", err)
 					}
@@ -234,7 +234,7 @@ func PromptForFlag(flag *pflag.Flag, stdIn io.Reader, stdOut io.Writer) error {
 					if err != nil {
 						return fmt.Errorf("infoPrompt: %w", err)
 					}
-					_, err = fmt.Fprintf(stdOut, "This flag is a list. Each line you type will be one element in the list. To terminate the list, press Enter.")
+					_, err = fmt.Fprintf(stdOut, "This flag is a list. Each line you type will be one element in the list. To terminate the list, press Enter.\n")
 					if err != nil {
 						return fmt.Errorf("fmt.Fprintf at the second 'this flag is a list' notification: %w", err)
 					}
