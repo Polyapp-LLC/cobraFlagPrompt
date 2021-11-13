@@ -4,15 +4,26 @@ Cobra Flag Prompt prompts users to enter values for required flags. It is an ext
 [GoDoc](https://pkg.go.dev/github.com/Polyapp-LLC/cobraFlagPrompt)
 
 ## User Experience Before Cobra Flag Prompt
+Without Cobra Flag Prompt, the program immediately terminates if the user did not enter a required flag and prints out which flag(s) were missing and all usage text for all flags. The user must then retype the command, add the new flag(s), identify the flag(s) usage text, and choose the correct value for the required flag. This isn't a big deal with programs which only have two options, but for programs with dozens of options the process becomes tedious.
+
+Video: https://youtu.be/EhVW5Vl9KAE
 
 ## User Experience After Cobra Flag Prompt
+With Cobra Flag Prompt, the user is prompted for any missing required flags. To assist the user, the Usage information for the missing flag(s) is displayed when the user needs it.
+
+Video: https://youtu.be/5sNhdYA5hc4
 
 ## Usage
+Usage is trivial. Replace calls to `MarkFlagRequired` with `cobraFlagPrompt.MarkFlagRequired` and calls to `MarkPersistentFlagRequired` with `cobraFlagPrompt.MarkPersistentFlagRequired`.
+
+Advanced usage can be ascertained by reading the [GoDoc](https://pkg.go.dev/github.com/Polyapp-LLC/cobraFlagPrompt) or the source code.
+
+## Usage Walkthrough
 First, get the package
 
 `go get github.com/Polyapp-LLC/cobraFlagPrompt`
 
-Then modify your existing Cobra code. Here is an example Cobra init() function for a program with 2 flags and which does **NOT** use cobraFlagPrompt:
+Then modify your existing code. Here is an example Cobra init() function for a program with 2 flags and which does **NOT** use cobraFlagPrompt:
 ```
 func init() {
     rootCmd.Flags().StringVar(&EnvironmentName, "environmentName", "", `environment names can only be lowercase ascii characters and hyphens. Example: test-one`)
@@ -34,10 +45,6 @@ func init() {
     rootCmd.Flags().StringVar(&EnvironmentName, "environmentName", "", `environment names can only be lowercase ascii characters and hyphens. Example: test-one`)
     rootCmd.PersistentFlags().StringVarP(&CloudName, "cloudName", "n", "", `cloud name must be one of the following strings: "AWS", "Azure", "Google", "localhost"`)
     
-    // WARNING: If you are using rootCmd.PreRunE or rootCmd.PreRun then please define them PRIOR to this next line of code.
-    // If you must define them after this line of code, call `func cobraFlagPrompt.CobraFlagPromptPreRunE`
-    // at the end of your rootCmd.PreRunE or rootCmd.PreRun
-    // Read the GoDoc for more information.
     err := cobraFlagPrompt.MarkFlagRequired(rootCmd, "environmentName")
     if err != nil {
         panic("cobraFlagPrompt.MarkFlagRequired(environmentName): " + err.Error())
@@ -51,4 +58,4 @@ func init() {
 The results can be seen above (this is the code used in the example videos).
 
 ## Support and Issues
-Cobra Flag Prompt supports many of the different flag types (all string types, int types, uint types, booleans, and slices thereof), but Cobra also supports a number of non-standard data types like duration and custom which are not supported. If you want to add support for a type, please contribute!. Tests are in [cobraFlagPrompt_test.go](./cobraFlagPrompt_test.go). Questions? Leave an Issue! Thanks :)
+Cobra Flag Prompt ought to work with all flag types supported by Cobra. Tests are in [cobraFlagPrompt_test.go](./cobraFlagPrompt_test.go). Questions? Leave an Issue! Thanks :)
